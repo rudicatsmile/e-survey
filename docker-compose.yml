@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # 1. Database MySQL 8
+  mysql:
+    image: mysql:8.0
+    container_name: esurvey_mysql
+    restart: always
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: esurvey
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. MinIO (S3-compatible Object Storage untuk Logo & Export)
+  minio:
+    image: minio/minio:latest
+    container_name: esurvey_minio
+    restart: always
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  # 3. Next.js 15 Web Application
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: esurvey_web
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      DATABASE_HOST: mysql
+      DATABASE_PORT: 3306
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ""
+      DATABASE_NAME: esurvey
+      DATABASE_URL: "mysql://root@mysql:3306/esurvey"
+      NEXTAUTH_URL: "http://localhost:3000"
+      NEXTAUTH_SECRET: "surveikepuasan-auth-secret-key-development-32chars"
+      JWT_SECRET: "surveikepuasan-jwt-token-secret-key-2025-secure"
+      CRON_SECRET: "cron-secret-xxxxx"
+
+volumes:
+  mysql_data:
+    driver: local
+  minio_data:
+    driver: local
